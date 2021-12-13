@@ -2,12 +2,14 @@ package com.example.coroutinesstudying
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.widget.ProgressBar
 import android.widget.Toast
 import com.example.coroutinesstudying.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
+import kotlin.system.measureTimeMillis
 
 
 class MainActivity : AppCompatActivity() {
@@ -23,29 +25,31 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.jobButton.setOnClickListener {
-            if (!::job.isInitialized) {
-                initJob()
-            }
-            binding.jobProgressBar.startJobOrCancel(job)
-
+            updateJobCompletedTextView("Clicked")
+            fakeApiRequest()
         }
     }
 
-    fun ProgressBar.startJobOrCancel(job: Job) {
-        if (this.progress > 0) {
-            resetJob()
-            println("This job already cancelled")
-        } else {
-            binding.jobButton.setText("Cancel Job #1")
-            CoroutineScope(IO + job).launch {
-                print("coroutine $this is actived with job $job")
-
-                for (i in PROGRESS_START..PROGRESS_MAX) {
-                    delay((JOB_TIME / PROGRESS_MAX).toLong())
-                    this@startJobOrCancel.progress = i
-                }
-                updateJobCompletedTextView("Job Completed")
+    private fun fakeApiRequest() {
+        GlobalScope.launch(IO) {
+            val executionTime = measureTimeMillis {
+                val result1 = async {
+                    Log.i("debug", "launching job 1: ${Thread.currentThread().name}")
+                    getResult1FromApi()
+                }.await()
+                updateJobCompletedTextView(result1)
+                val result2 = async {
+                    Log.i("debug", "launching job 2: ${Thread.currentThread().name}")
+                    try {
+                        getResult2FromApi(result1)
+                    }catch (e: Exception){
+                        e.message
+                    }
+                }.await()
+                updateJobCompletedTextView(result2)
+                Log.i("debug", "Ended here $result2")
             }
+            Log.i("debug", "Debug: total elapsed time: $executionTime ms")
         }
     }
 
@@ -55,38 +59,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun resetJob() {
-        if (job.isActive || job.isCompleted) {
-            job.cancel(CancellationException("Resetting Job"))
-        }
-        initJob()
+    private suspend fun getResult1FromApi(): String {
+        delay(1000)
+        return "RESULT 1#"
     }
 
-    fun initJob() {
-        binding.run {
-            jobButton.setText("Start Job #1")
-            updateJobCompletedTextView("")
-            job = Job()
-            job.invokeOnCompletion {
-                it?.message.let {
-                    var msg = it
-                    if (it.isNullOrBlank()) {
-                        msg = "Unknown error"
-                    }
-                    print("${job} was cancelled .Reason: $msg")
-                    showToast(msg)
-                }
-            }
-            binding.jobProgressBar.max = PROGRESS_MAX
-            binding.jobProgressBar.progress = PROGRESS_START
-
+    private suspend fun getResult2FromApi(result1: String): String {
+        delay(2000)
+        if (result1 == "RESULT 1#") {
+            return "$result1 - RESULT 2#"
         }
-
+        throw CancellationException("Result 1 was incorrect")
     }
 
-    private fun showToast(text: String?) {
-        GlobalScope.launch(Main) {
-            Toast.makeText(this@MainActivity, text, Toast.LENGTH_LONG).show()
-        }
-    }
+
 }
