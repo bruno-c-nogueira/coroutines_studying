@@ -30,34 +30,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun main() {
-        val parentJob = CoroutineScope(IO).launch(handler) {
-            val jobA = launch {
-                val resultA = getResult(1)
-                Log.i("debug", "resultA: $resultA")
-            }
-            jobA.invokeOnCompletion {
-                if (it != null) {
-                    Log.i("debug", "Error getting resultA : $it")
+        val parentJob = CoroutineScope(IO).launch {
+            supervisorScope {
+                val jobA = launch {
+                    val resultA = getResult(1)
+                    Log.i("debug", "resultA: $resultA")
                 }
-            }
-
-            val jobB = launch {
-                val resultB = getResult(2)
-                Log.i("debug", "resultB: $resultB")
-            }
-            jobB.invokeOnCompletion {
-                if (it != null) {
-                    Log.i("debug", "Error getting resultB: $it")
+                jobA.invokeOnCompletion {
+                    if (it != null) {
+                        Log.i("debug", "Error getting resultA : $it")
+                    }
                 }
-            }
 
-            val jobC = launch {
-                val resultC = getResult(3)
-                Log.i("debug", "resultC: $resultC")
-            }
-            jobC.invokeOnCompletion {
-                if (it != null) {
-                    Log.i("debug", "Error getting resultC : $it")
+                val jobB = launch(handler) {
+                    val resultB = getResult(2)
+                    Log.i("debug", "resultB: $resultB")
+                }
+                jobB.invokeOnCompletion {
+                    if (it != null) {
+                        Log.i("debug", "Error getting resultB: $it")
+                    }
+                }
+
+                val jobC = launch {
+                    val resultC = getResult(3)
+                    Log.i("debug", "resultC: $resultC")
+                }
+                jobC.invokeOnCompletion {
+                    if (it != null) {
+                        Log.i("debug", "Error getting resultC : $it")
+                    }
                 }
             }
         }
