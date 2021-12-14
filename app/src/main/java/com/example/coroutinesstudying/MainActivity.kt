@@ -3,74 +3,83 @@ package com.example.coroutinesstudying
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
-import android.widget.ProgressBar
-import android.widget.Toast
 import com.example.coroutinesstudying.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
-import kotlin.system.measureTimeMillis
+import java.lang.Exception
 
 
 class MainActivity : AppCompatActivity() {
     lateinit var binding: ActivityMainBinding
-    private val PROGRESS_MAX = 100
-    private val PROGRESS_START = 0
-    private val JOB_TIME = 4000
-    private lateinit var job: CompletableJob
 
-    private val TIMEOUT = 1900L
+    private lateinit var job: Job
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        main()
         binding.jobButton.setOnClickListener {
-            updateJobCompletedTextView("Clicked")
-            fakeApiRequest()
+            job.cancel()
         }
     }
 
-    private fun fakeApiRequest() {
-        GlobalScope.launch(IO) {
-            val executionTime = measureTimeMillis {
-                val result1 = async {
-                    Log.i("debug", "launching job 1: ${Thread.currentThread().name}")
-                    getResult1FromApi()
-                }.await()
-                updateJobCompletedTextView(result1)
-                val result2 = async {
-                    Log.i("debug", "launching job 2: ${Thread.currentThread().name}")
-                    try {
-                        getResult2FromApi(result1)
-                    }catch (e: Exception){
-                        e.message
-                    }
-                }.await()
-                updateJobCompletedTextView(result2)
-                Log.i("debug", "Ended here $result2")
+    val handler = CoroutineExceptionHandler { _, exception ->
+        Log.i("debug", "Exception thrown in one of the children: $exception")
+    }
+
+    private fun main() {
+        val parentJob = CoroutineScope(IO).launch(handler) {
+            val jobA = launch {
+                val resultA = getResult(1)
+                Log.i("debug", "resultA: $resultA")
             }
-            Log.i("debug", "Debug: total elapsed time: $executionTime ms")
+            jobA.invokeOnCompletion {
+                if (it != null) {
+                    Log.i("debug", "Error getting resultA : $it")
+                }
+            }
+
+            val jobB = launch {
+                val resultB = getResult(2)
+                Log.i("debug", "resultB: $resultB")
+            }
+            jobB.invokeOnCompletion {
+                if (it != null) {
+                    Log.i("debug", "Error getting resultB: $it")
+                }
+            }
+
+            val jobC = launch {
+                val resultC = getResult(3)
+                Log.i("debug", "resultC: $resultC")
+            }
+            jobC.invokeOnCompletion {
+                if (it != null) {
+                    Log.i("debug", "Error getting resultC : $it")
+                }
+            }
+        }
+        parentJob.invokeOnCompletion {
+            if (it != null) {
+                Log.i("debug", "Parent Job failed : # $it")
+            } else {
+                Log.i("debug", "Success in parent job")
+            }
         }
     }
 
-    private fun updateJobCompletedTextView(text: String?) {
-        GlobalScope.launch(Main) {
-            binding.jobCompleteText.text = text
+    private suspend fun getResult(number: Int): Int {
+        delay(number.times(500L))
+        if (number == 2) {
+            throw CancellationException("Error getting result for number $number")
         }
+        return number * 2
     }
 
-    private suspend fun getResult1FromApi(): String {
-        delay(1000)
-        return "RESULT 1#"
+    private fun printLn(message: String) {
+        Log.i("debug", message)
     }
-
-    private suspend fun getResult2FromApi(result1: String): String {
-        delay(2000)
-        if (result1 == "RESULT 1#") {
-            return "$result1 - RESULT 2#"
-        }
-        throw CancellationException("Result 1 was incorrect")
-    }
-
 
 }
